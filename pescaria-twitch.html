@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b2a35">
+<title>Pescaria Twitch</title>
+<style>
+:root{--deep:#0b2a35;--mid:#12485a;--foam:#e8f4f1;--bob:#e5483a;--sand:#f2c879;--mut:#8fb6bd;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0;background:#06181f;color:var(--foam);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif}
+.app{width:min(100vw,calc(100dvh*9/16));height:min(100dvh,calc(100vw*16/9));margin:0 auto;position:relative;overflow:hidden;
+background:linear-gradient(180deg,var(--deep) 0%,var(--mid) 100%);display:flex;flex-direction:column;padding:18px}
+.screen{display:none;flex:1;min-height:0;flex-direction:column;gap:12px}
+.screen.on{display:flex}
+h1{font-size:1.6rem;margin:6px 0 2px}
+p{margin:0;color:var(--mut);font-size:.9rem;line-height:1.4}
+label{font-size:.85rem;color:var(--mut)}
+input{width:100%;padding:12px;border-radius:10px;border:1px solid #2c6272;background:#0a222b;color:var(--foam);font-size:1rem}
+input:focus-visible,button:focus-visible{outline:3px solid var(--sand);outline-offset:2px}
+button{font:inherit;cursor:pointer}
+.btn{padding:13px;border:0;border-radius:12px;background:var(--sand);color:#2a1d00;font-weight:700;font-size:1rem}
+.btn.ghost{background:transparent;color:var(--mut);border:1px solid #2c6272;font-weight:400;font-size:.85rem;padding:9px}
+.steps{font-size:.82rem;color:var(--mut);line-height:1.5;padding-left:18px;margin:0}
+code{background:#0a222b;padding:2px 5px;border-radius:5px;color:var(--foam);word-break:break-all}
+details{font-size:.85rem;color:var(--mut)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;color:var(--mut)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#777;margin-right:6px}
+.dot.ok{background:#4cd08a}
+.last{flex:0 0 auto;min-height:120px;background:#0a222b;border:1px solid #2c6272;border-radius:16px;padding:16px;display:flex;align-items:center;font-size:1.15rem;line-height:1.4}
+.last.empty{color:var(--mut);font-size:.95rem}
+mark{background:none;color:var(--sand);font-weight:700}
+.center{flex:1;display:flex;align-items:center;justify-content:center}
+.bobber{width:min(62vw,calc(100dvh*.24));aspect-ratio:1;border-radius:50%;border:0;color:#fff;font-weight:700;font-size:1.3rem;
+background:linear-gradient(180deg,var(--bob) 0 50%,#fff 50% 100%);box-shadow:0 0 0 6px #0a222b,0 14px 30px rgba(0,0,0,.45);
+display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:20% 0 18%;transition:transform .12s}
+.bobber span:last-child{color:#c23a2e}
+.bobber:active:not(:disabled){transform:scale(.94)}
+.bobber:disabled{filter:grayscale(.7);opacity:.7}
+.status{min-height:1.2em;text-align:center;font-size:.82rem;color:var(--mut)}
+.hist{flex:0 0 22%;overflow-y:auto;display:flex;flex-direction:column;gap:6px;font-size:.82rem;color:var(--mut)}
+.hist div{padding:7px 10px;background:#0a222b;border-radius:8px}
+@media (prefers-reduced-motion:reduce){.bobber{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<section class="screen" id="s-login">
+  <h1>Pescaria</h1>
+  <p>Controle seu <code>$pescar</code> sem abrir o chat da Twitch.</p>
+  <label for="cid">Client ID do seu app na Twitch</label>
+  <input id="cid" autocomplete="off" placeholder="cole aqui o Client ID">
+  <button class="btn" id="btn-login">Conectar com a Twitch</button>
+  <ol class="steps">
+    <li>Entre em <code>dev.twitch.tv/console</code> e clique em Registrar aplicativo.</li>
+    <li>Em URL de redirecionamento OAuth, coloque: <code id="redir"></code></li>
+    <li>Categoria: Application Integration. Copie o Client ID e cole acima.</li>
+  </ol>
+  <details><summary>Já tenho um token</summary>
+    <input id="tok" autocomplete="off" placeholder="token de acesso (chat:read chat:edit)" style="margin:8px 0">
+    <button class="btn ghost" id="btn-tok">Usar token</button>
+  </details>
+  <p id="login-err" style="color:#ff9b8f"></p>
+</section>
+
+<section class="screen" id="s-chan">
+  <h1>Qual chat?</h1>
+  <p>Digite o nome do canal do streamer onde o jogo acontece.</p>
+  <label for="chan">Canal</label>
+  <input id="chan" autocomplete="off" autocapitalize="none" placeholder="nome do canal">
+  <button class="btn" id="btn-join">Entrar no chat</button>
+  <button class="btn ghost" id="btn-out1">Sair da conta</button>
+</section>
+
+<section class="screen" id="s-game">
+  <div class="top"><span><span class="dot" id="dot"></span><span id="where"></span></span><button class="btn ghost" id="btn-back">Trocar chat</button></div>
+  <div class="last empty" id="last">Aguardando sua primeira pescaria.</div>
+  <div class="center"><button class="bobber" id="fish"><span>Pescar</span><span>$pescar</span></button></div>
+  <div class="status" id="status"></div>
+  <div class="hist" id="hist"></div>
+</section>
+
+</div>
+<script>
+(function(){
+var BOT="twishgamebot",CMD="$pescar",COOL=1500;
+var $=function(i){return document.getElementById(i)};
+var S={token:null,login:null,chan:null,ws:null,retry:0,closing:false};
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}
+function show(id){document.querySelectorAll(".screen").forEach(function(s){s.classList.toggle("on",s.id===id)})}
+var redirect=location.origin+location.pathname;
+$("redir").textContent=redirect;
+$("cid").value=lsGet("cid")||"";
+$("chan").value=lsGet("chan")||"";
+
+function login(){
+  var cid=$("cid").value.trim();
+  if(!cid){$("login-err").textContent="Cole o Client ID primeiro.";return}
+  lsSet("cid",cid);
+  var st=Math.random().toString(36).slice(2);
+  lsSet("state",st);
+  location.href="https://id.twitch.tv/oauth2/authorize?response_type=token&client_id="+encodeURIComponent(cid)+
+    "&redirect_uri="+encodeURIComponent(redirect)+"&scope="+encodeURIComponent("chat:read chat:edit")+"&state="+st;
+}
+function validate(tok){
+  return fetch("https://id.twitch.tv/oauth2/validate",{headers:{Authorization:"OAuth "+tok}}).then(function(r){
+    if(!r.ok)throw new Error("token");return r.json()});
+}
+function useToken(tok){
+  validate(tok).then(function(d){
+    S.token=tok;S.login=d.login;lsSet("token",tok);show("s-chan");
+  }).catch(function(){
+    lsSet("token",null);show("s-login");$("login-err").textContent="Token inválido ou expirado. Conecte de novo.";
+  });
+}
+function logout(){closeWs();lsSet("token",null);S.token=null;show("s-login")}
+
+function closeWs(){S.closing=true;if(S.ws){try{S.ws.close()}catch(e){}}S.ws=null;setDot(false)}
+function setDot(on){$("dot").classList.toggle("ok",on)}
+function status(t){$("status").textContent=t||""}
+
+function connect(){
+  S.closing=false;
+  var ws=new WebSocket("wss://irc-ws.chat.twitch.tv:443");
+  S.ws=ws;
+  ws.onopen=function(){
+    ws.send("PASS oauth:"+S.token);ws.send("NICK "+S.login);ws.send("JOIN #"+S.chan);
+  };
+  ws.onmessage=function(ev){ev.data.split("\r\n").forEach(handle)};
+  ws.onclose=function(){
+    setDot(false);
+    if(!S.closing&&S.ws===ws){S.retry++;status("Reconectando…");setTimeout(function(){if(!S.closing)connect()},Math.min(1000*S.retry,8000))}
+  };
+}
+function handle(line){
+  if(!line)return;
+  if(line.indexOf("PING")===0){S.ws.send("PONG :tmi.twitch.tv");return}
+  if(/ 001 /.test(line)){S.retry=0}
+  if(/ JOIN #/.test(line)&&line.indexOf(":"+S.login+"!")===0){setDot(true);status("")}
+  if(/NOTICE/.test(line)){
+    var n=line.match(/NOTICE #?\S* :(.*)$/);
+    if(n){status(n[1]);if(/authentication failed/i.test(n[1]))logout()}
+    return;
+  }
+  var m=line.match(/^:([^!]+)![^ ]+ PRIVMSG #(\S+) :(.*)$/);
+  if(!m)return;
+  var nick=m[1].toLowerCase(),text=m[3];
+  if(nick!==BOT)return;
+  if(text.toLowerCase().indexOf(S.login.toLowerCase())===-1)return;
+  showMsg(text);
+}
+function esc(s){return s.replace(/[&<>]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;"}[c]})}
+function showMsg(text){
+  var re=new RegExp("(@?"+S.login.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig");
+  var html=esc(text).replace(re,"<mark>$1</mark>");
+  var last=$("last");last.className="last";last.innerHTML=html;
+  var h=$("hist"),d=document.createElement("div");
+  d.textContent=new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+"  "+text;
+  h.insertBefore(d,h.firstChild);
+  while(h.children.length>30)h.removeChild(h.lastChild);
+}
+function join(){
+  var c=$("chan").value.trim().replace(/^#/,"").toLowerCase();
+  if(!c)return;
+  S.chan=c;lsSet("chan",c);$("where").textContent="#"+c+" · "+S.login;
+  show("s-game");closeWs();connect();
+}
+function fish(){
+  if(!S.ws||S.ws.readyState!==1){status("Sem conexão com o chat.");return}
+  S.ws.send("PRIVMSG #"+S.chan+" :"+CMD);
+  var b=$("fish");b.disabled=true;status("Enviado. Aguardando o bot…");
+  setTimeout(function(){b.disabled=false},COOL);
+}
+
+$("btn-login").onclick=login;
+$("btn-tok").onclick=function(){var t=$("tok").value.trim().replace(/^oauth:/i,"");if(t)useToken(t)};
+$("btn-join").onclick=join;
+$("chan").onkeydown=function(e){if(e.key==="Enter")join()};
+$("btn-out1").onclick=logout;
+$("btn-back").onclick=function(){closeWs();show("s-chan")};
+$("fish").onclick=fish;
+
+var hash=new URLSearchParams(location.hash.slice(1));
+if(hash.get("access_token")){
+  var ok=hash.get("state")===lsGet("state");
+  history.replaceState(null,"",location.pathname);
+  if(ok)useToken(hash.get("access_token"));else{show("s-login");$("login-err").textContent="Falha na verificação. Tente conectar de novo."}
+}else if(lsGet("token")){useToken(lsGet("token"))}
+else show("s-login");
+})();
+</script>
+</body>
+</html>
